@@ -56,6 +56,10 @@ typedef struct _mallinfo {
     int fordblks;
 } mallinfo_t;
 
+void *initialize_lib(size_t size, const void *caller);
+void initialize_free(void *ptr, const void *caller);
+void *initialize_realloc(void *ptr, size_t size, const void *caller);
+void *initialize_calloc(size_t nmemb, size_t size, const void *caller);
 int initialize_malloc();
 int initialize_heaps();
 
@@ -73,6 +77,6 @@ extern void *realloc(void *ptr, size_t size);
 extern long sys_page_size;
 extern int sys_core_count;
 extern int malloc_initialized;
-extern __thread int *restartable;
+extern __thread int restartable;
 
 #endif
