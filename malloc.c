@@ -45,8 +45,8 @@ __malloc_hook_t __malloc_hook = (__malloc_hook_t)initialize_lib;
 int class_index(size_t size)
 {
     if (size > MAX_LRG_SIZE) return -1;
-    if (size > MAX_SML_SIZE) return LRG_SIZE_CLASS(size);
-    return SML_SIZE_CLASS(size);
+    if (size > MAX_SML_SIZE) return LRG_SIZE_CLASS_IDX(size);
+    return SML_SIZE_CLASS_IDX(size);
 }
 
 // only for size < 32 bits
@@ -143,28 +143,30 @@ int initialize_size_classes()
     // mapping arrays
     int next_size = 0;
     int num_size_classes = sc;
-    // int c;
-    // for (c = 1; c < num_size_classes; c++) {
-    //     int max_size_in_class = class_to_size_[c];
-    //     int s;
-    //     for (s = next_size; s <= max_size_in_class; s += SML_ALIGN) {
-    //         class_array_[class_index(s)] = c;
-    //     }
-    //     next_size = max_size_in_class + SML_ALIGN;
-    // }
+    int c;
+    for (c = 1; c < num_size_classes; c++) {
+        int max_size_in_class = class_to_size_[c];
+        int s;
+        for (s = next_size; s <= max_size_in_class; s += SML_ALIGN) {
+            class_array_[class_index(s)] = c;
+        }
+        next_size = max_size_in_class + SML_ALIGN;
+    }
 
-    printf("class array has %d items\n", sizeof(class_array_) / sizeof(char));
-    printf("size array has %d items\n",
-           sizeof(class_to_size_) / sizeof(size_t));
-
+    printf(
+        "Below is a list of (size class idx, max bytes allowed in class) "
+        "pairs\n");
     int i;
     for (i = 0; i < num_size_classes; i++) {
         printf("%d:%d ", i, (int)class_to_size_[i]);
     }
-    printf("\n");
+    printf(
+        "\nBelow is a list of (size class idx, number of pages needed) "
+        "pairs\n");
     for (i = 0; i < num_size_classes; i++) {
         printf("%d:%d ", i, (int)class_to_pages_[i]);
     }
+    printf("\n");
     return SUCCESS;
 }
 

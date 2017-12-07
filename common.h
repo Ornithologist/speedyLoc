@@ -31,8 +31,8 @@
 #define SML_ALIGN 8
 #define LRG_ALIGN 128
 #define REAL_SML_ALIGN 16
-#define SML_SIZE_CLASS(s) ((uint32_t)(s) + 7) >> 3
-#define LRG_SIZE_CLASS(s) ((uint32_t)(s) + 127 + (120 << 7)) >> 7
+#define SML_SIZE_CLASS_IDX(s) ((uint32_t)(s) + 7) >> 3
+#define LRG_SIZE_CLASS_IDX(s) ((uint32_t)(s) + 127 + (120 << 7)) >> 7
 
 /*
  * struct for a memory block in the buddy system
