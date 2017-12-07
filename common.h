@@ -19,10 +19,13 @@
 #define VALID 0
 #define INVALID 1
 
+#define MAX_BINS 20         // FIXME: number of size classes
 #define SYS_CORE_COUNT 1    // default val
 #define SYS_PAGE_SIZE 4096  // default val
-
-#define SIZE_TO_ORDER(size) (int)((log(size) / log(BASE)) + 1)
+#define MAX_SML_SIZE 1024
+#define MAX_LRG_SIZE 256 * 1024
+#define SML_SIZE_CLASS(s) ((uint32_t)(s) + 7) >> 3
+#define LRG_SIZE_CLASS(s) ((uint32_t)(s) + 127 + (120 << 7)) >> 7
 
 /*
  * struct for a memory block in the buddy system
@@ -33,6 +36,26 @@ typedef struct _block_header {
     uint8_t status;
     struct _block_header *next;
 } block_h_t;
+
+/*
+ * struct for a superblock of a (heap, size_class)
+ * @attri size_class: size class
+ * @attri base_block: addr for the first block_h_t
+ */
+typedef struct _superblock_header {
+    unsigned int size_class;
+    void *base_block;
+} superblock_h_t;
+
+/*
+ * struct for a heap of a CPU
+ * @attri cpu: determine CPU for which the heap is allocated
+ * @attri bins: list of superblocks allocated, index refers to size_class
+ */
+typedef struct _heap_header {
+    unsigned int cpu;  // zero for global heap
+    superblock_h_t *bins[MAX_BINS];
+} heap_h_t;
 
 /*
  * struct for malloc info
@@ -56,6 +79,7 @@ typedef struct _mallinfo {
     int fordblks;
 } mallinfo_t;
 
+int size_to_class(size_t size);
 void *initialize_lib(size_t size, const void *caller);
 void initialize_free(void *ptr, const void *caller);
 void *initialize_realloc(void *ptr, size_t size, const void *caller);
