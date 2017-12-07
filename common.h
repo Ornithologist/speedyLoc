@@ -13,6 +13,8 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#define _GNU_SOURCE
+
 #define SUCCESS 0
 #define FAILURE 1
 #define IN_USE 1
