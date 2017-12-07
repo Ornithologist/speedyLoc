@@ -216,6 +216,7 @@ int initialize_heaps()
 void *__lib_malloc(size_t size)
 {
     block_h_t *ret_addr = NULL;
+    void *mmapped;
 
     // hook & thread ini
     __malloc_hook_t lib_hook = __malloc_hook;
@@ -223,7 +224,14 @@ void *__lib_malloc(size_t size)
         return (*lib_hook)(size, __builtin_return_address(0));
     }
 
-    return (void *)ret_addr;
+    if ((mmapped = (mmap(NULL, size, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) == MAP_FAILED) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    ret_addr = (block_h_t *)mmapped;
+    return mmapped;
 }
 
 void *malloc(size_t size) __attribute__((weak, alias("__lib_malloc")));
