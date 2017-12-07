@@ -102,7 +102,8 @@ typedef void (*__free_hook_t)(void *ptr, const void *caller);
 typedef void *(*__realloc_hook_t)(void *ptr, size_t size, const void *caller);
 typedef void *(*__calloc_hook_t)(size_t nmemb, size_t size, const void *caller);
 
-void *__lib_malloc(size_t size);  // le alias
+void *__lib_malloc(size_t size);    // le alias
+extern void __lib_free(void *mem);  // le alias
 extern void *malloc(size_t size);
 extern void free(void *mem_ptr);
 extern void *calloc(size_t nmemb, size_t size);
