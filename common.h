@@ -22,12 +22,12 @@
 #define VALID 0
 #define INVALID 1
 
-#define MAX_BINS 96  // FIXME: number of size classes
+#define MAX_BINS 64  // FIXME: number of size classes
 #define FLAT_CLASS_NO 377
 #define SYS_CORE_COUNT 1    // default val
 #define SYS_PAGE_SIZE 4096  // default val
 #define MAX_SML_SIZE 1024
-#define MAX_LRG_SIZE 256 * 1024
+#define MAX_LRG_SIZE 4096
 #define SML_ALIGN 8
 #define LRG_ALIGN 128
 #define REAL_SML_ALIGN 16
@@ -112,11 +112,12 @@ extern void *calloc(size_t nmemb, size_t size);
 extern void *realloc(void *ptr, size_t size);
 
 extern long sys_page_size;
+extern int sys_page_shift;
 extern int sys_core_count;
 extern int malloc_initialized;
 extern __thread int restartable;
 extern char class_array_[FLAT_CLASS_NO];
-extern int class_to_size_[MAX_BINS];
+extern size_t class_to_size_[MAX_BINS];
 extern size_t class_to_pages_[MAX_BINS];
 
 #endif

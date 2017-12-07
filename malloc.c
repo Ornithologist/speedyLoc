@@ -12,10 +12,11 @@
 
 // ini globals
 long sys_page_size = SYS_PAGE_SIZE;
+int sys_page_shift = 16;
 int sys_core_count = SYS_CORE_COUNT;
 int malloc_initialized = 0;
 char class_array_[FLAT_CLASS_NO];
-int class_to_size_[MAX_BINS];
+size_t class_to_size_[MAX_BINS];
 size_t class_to_pages_[MAX_BINS];
 
 // per thread global
@@ -118,14 +119,14 @@ int initialize_size_classes()
             // the span as are needed when moving objects from the central
             // freelists and spans to the thread caches.
         } while ((psize / size) < (blocks_to_move));
-        size_t my_pages = psize >> 16;
+        size_t my_pages = psize >> sys_page_shift;
 
         if (sc > 1 && my_pages == class_to_pages_[sc - 1]) {
             // See if we can merge this into the previous class without
             // increasing the fragmentation of the previous class.
-            size_t my_objects = (my_pages << 16) / size;
-            size_t prev_objects =
-                (class_to_pages_[sc - 1] << 16) / class_to_size_[sc - 1];
+            size_t my_objects = (my_pages << sys_page_shift) / size;
+            size_t prev_objects = (class_to_pages_[sc - 1] << sys_page_shift) /
+                                  class_to_size_[sc - 1];
             if (my_objects == prev_objects) {
                 // Adjust last class to include this size
                 class_to_size_[sc - 1] = size;
@@ -139,13 +140,30 @@ int initialize_size_classes()
         sc++;
     }
 
+    // mapping arrays
+    int next_size = 0;
+    int num_size_classes = sc;
+    // int c;
+    // for (c = 1; c < num_size_classes; c++) {
+    //     int max_size_in_class = class_to_size_[c];
+    //     int s;
+    //     for (s = next_size; s <= max_size_in_class; s += SML_ALIGN) {
+    //         class_array_[class_index(s)] = c;
+    //     }
+    //     next_size = max_size_in_class + SML_ALIGN;
+    // }
+
+    printf("class array has %d items\n", sizeof(class_array_) / sizeof(char));
+    printf("size array has %d items\n",
+           sizeof(class_to_size_) / sizeof(size_t));
+
     int i;
-    for (i = 0; i < sc; i++) {
-        printf("%d:%d ", i, class_to_pages_[i]);
+    for (i = 0; i < num_size_classes; i++) {
+        printf("%d:%d ", i, (int)class_to_size_[i]);
     }
     printf("\n");
-    for (i = 0; i < sc; i++) {
-        printf("%d:%d ", i, (int)class_to_size_[i]);
+    for (i = 0; i < num_size_classes; i++) {
+        printf("%d:%d ", i, (int)class_to_pages_[i]);
     }
     return SUCCESS;
 }
@@ -176,6 +194,7 @@ int initialize_malloc()
     // confirm global variables
     if ((sys_page_size = sysconf(_SC_PAGESIZE)) == -1)
         sys_page_size = SYS_PAGE_SIZE;
+    sys_page_shift = (int)(log(sys_page_size) / log(2));
 
     // confirm number of cores
     if ((sys_core_count = sysconf(_SC_NPROCESSORS_ONLN)) == -1)
