@@ -1,1 +1,0 @@
-cmd_/home/ubuntu/CS5600/project/speedyLoc/speedyloc_driver.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/ubuntu/CS5600/project/speedyLoc/speedyloc_driver.ko /home/ubuntu/CS5600/project/speedyLoc/speedyloc_driver.o /home/ubuntu/CS5600/project/speedyLoc/speedyloc_driver.mod.o
