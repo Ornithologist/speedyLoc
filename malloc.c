@@ -138,6 +138,16 @@ int initialize_size_classes()
         class_to_size_[sc] = size;
         sc++;
     }
+
+    int i;
+    for (i = 0; i < sc; i++) {
+        printf("%d:%d ", i, class_to_pages_[i]);
+    }
+    printf("\n");
+    for (i = 0; i < sc; i++) {
+        printf("%d:%d ", i, (int)class_to_size_[i]);
+    }
+    return SUCCESS;
 }
 
 /*

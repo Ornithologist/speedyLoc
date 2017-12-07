@@ -2,10 +2,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-int main(int argc, char** argv){
-	printf("Hello!!\n");
-	for(int i = 0; i < 1000000; i++){
-		// printf("%d\n", i);
-	}
-	return 0;
+int main(int argc, char** argv)
+{
+    printf("Hello!!\n");
+    int i;
+    for (i = 0; i < 1000000; i++) {
+        // printf("%d\n", i);
+    }
+    void* mem = malloc(1123);
+    return 0;
 }
