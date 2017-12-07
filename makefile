@@ -29,4 +29,3 @@ check:	clean libmalloc.so test
 
 dist:
 	dir=`basename $$PWD`; cd ..; tar cvf $$dir.tar ./$$dir; gzip $$dir.tar 
-	

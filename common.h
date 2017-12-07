@@ -19,11 +19,15 @@
 #define VALID 0
 #define INVALID 1
 
-#define MAX_BINS 20         // FIXME: number of size classes
+#define MAX_BINS 96  // FIXME: number of size classes
+#define FLAT_CLASS_NO 377
 #define SYS_CORE_COUNT 1    // default val
 #define SYS_PAGE_SIZE 4096  // default val
 #define MAX_SML_SIZE 1024
 #define MAX_LRG_SIZE 256 * 1024
+#define SML_ALIGN 8
+#define LRG_ALIGN 128
+#define REAL_SML_ALIGN 16
 #define SML_SIZE_CLASS(s) ((uint32_t)(s) + 7) >> 3
 #define LRG_SIZE_CLASS(s) ((uint32_t)(s) + 127 + (120 << 7)) >> 7
 
@@ -79,13 +83,18 @@ typedef struct _mallinfo {
     int fordblks;
 } mallinfo_t;
 
+int lg_floor(size_t size);  // only for size < 32 bits
+int size_to_no_blocks(size_t size);
 int size_to_class(size_t size);
+int class_index(size_t size);
+int size_to_alignment(size_t size);
 void *initialize_lib(size_t size, const void *caller);
 void initialize_free(void *ptr, const void *caller);
 void *initialize_realloc(void *ptr, size_t size, const void *caller);
 void *initialize_calloc(size_t nmemb, size_t size, const void *caller);
 int initialize_malloc();
 int initialize_heaps();
+int initialize_size_classes();
 
 typedef void *(*__malloc_hook_t)(size_t size, const void *caller);
 typedef void (*__free_hook_t)(void *ptr, const void *caller);
@@ -102,5 +111,8 @@ extern long sys_page_size;
 extern int sys_core_count;
 extern int malloc_initialized;
 extern __thread int restartable;
+extern char class_array_[FLAT_CLASS_NO];
+extern int class_to_size_[MAX_BINS];
+extern size_t class_to_pages_[MAX_BINS];
 
 #endif

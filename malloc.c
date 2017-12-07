@@ -14,6 +14,9 @@
 long sys_page_size = SYS_PAGE_SIZE;
 int sys_core_count = SYS_CORE_COUNT;
 int malloc_initialized = 0;
+char class_array_[FLAT_CLASS_NO];
+int class_to_size_[MAX_BINS];
+size_t class_to_pages_[MAX_BINS];
 
 // per thread global
 __thread int restartable;
@@ -38,11 +41,103 @@ __malloc_hook_t __malloc_hook = (__malloc_hook_t)initialize_lib;
 //   1025       (1025 + 127 + (120<<7)) / 128   129
 //   ...
 //   32768      (32768 + 127 + (120<<7)) / 128  376
-int size_to_class(size_t size)
+int class_index(size_t size)
 {
     if (size > MAX_LRG_SIZE) return -1;
     if (size > MAX_SML_SIZE) return LRG_SIZE_CLASS(size);
     return SML_SIZE_CLASS(size);
+}
+
+// only for size < 32 bits
+int lg_floor(size_t s)
+{
+    int i, log = 0;
+    for (i = 4; i >= 0; --i) {
+        int shift = (1 << i);
+        size_t x = s >> shift;
+        if (x != 0) {
+            s = x;
+            log += shift;
+        }
+    }
+    return log;
+}
+
+int size_to_no_blocks(size_t size)
+{
+    if (size == 0) return 0;
+    // Use approx 64k transfers between thread and central caches.
+    int num = (int)(64.0 * 1024.0 / size);
+    if (num < 2) num = 2;
+    if (num > 32) num = 32;
+    return num;
+}
+
+// convert size class sizes to next level alignments
+int size_to_alignment(size_t size)
+{
+    int alignment = SML_ALIGN;
+    if (size > MAX_LRG_SIZE) {
+        // Cap alignment at page size for large sizes.
+        alignment = sys_page_size;
+    } else if (size >= 128) {
+        // Space wasted due to alignment is at most 1/8, i.e., 12.5%.
+        alignment = (1 << lg_floor(size)) / 8;
+    } else if (size >= REAL_SML_ALIGN) {
+        // We need an alignment of at least 16 bytes to satisfy
+        // requirements for some SSE types.
+        alignment = REAL_SML_ALIGN;
+    }
+    // Maximum alignment allowed is page size alignment.
+    if (alignment > sys_page_size) {
+        alignment = sys_page_size;
+    }
+    return alignment;
+}
+
+// initialize class_array_, class_to_size_, and class_to_pages_
+int initialize_size_classes()
+{
+    // Compute the size classes we want to use
+    int sc = 1;  // Next size class to assign
+    int alignment = REAL_SML_ALIGN;
+    size_t size;
+    for (size = REAL_SML_ALIGN; size <= MAX_LRG_SIZE; size += alignment) {
+        alignment = size_to_alignment(size);
+
+        int blocks_to_move = size_to_no_blocks(size) / 4;
+        size_t psize = 0;
+        do {
+            psize += sys_page_size;
+            // Allocate enough pages so leftover is less than 1/8 of total.
+            // This bounds wasted space to at most 12.5%.
+            while ((psize % size) > (psize >> 3)) {
+                psize += sys_page_size;
+            }
+            // Continue to add pages until there are at least as many objects in
+            // the span as are needed when moving objects from the central
+            // freelists and spans to the thread caches.
+        } while ((psize / size) < (blocks_to_move));
+        size_t my_pages = psize >> 16;
+
+        if (sc > 1 && my_pages == class_to_pages_[sc - 1]) {
+            // See if we can merge this into the previous class without
+            // increasing the fragmentation of the previous class.
+            size_t my_objects = (my_pages << 16) / size;
+            size_t prev_objects =
+                (class_to_pages_[sc - 1] << 16) / class_to_size_[sc - 1];
+            if (my_objects == prev_objects) {
+                // Adjust last class to include this size
+                class_to_size_[sc - 1] = size;
+                continue;
+            }
+        }
+
+        // Add new class
+        class_to_pages_[sc] = my_pages;
+        class_to_size_[sc] = size;
+        sc++;
+    }
 }
 
 /*
@@ -76,6 +171,12 @@ int initialize_malloc()
     if ((sys_core_count = sysconf(_SC_NPROCESSORS_ONLN)) == -1)
         sys_core_count = SYS_CORE_COUNT;
 
+    // ini size class mappings
+    if ((out = initialize_size_classes()) == FAILURE) {
+        errno = ENOMEM;
+        return out;
+    }
+
     // ini arena meta data
     if ((out = initialize_heaps()) == FAILURE) {
         errno = ENOMEM;
@@ -96,8 +197,6 @@ int initialize_heaps()
 {
     int cpu = sched_getcpu();
     printf("currently running on %d\n", cpu);
-    int class = size_to_class(132435);
-    printf("current class is %d\n", class);
 }
 
 /*
