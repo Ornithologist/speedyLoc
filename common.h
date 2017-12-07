@@ -57,7 +57,7 @@ typedef struct _superblock_header {
  * @attri bins: list of superblocks allocated, index refers to size_class
  */
 typedef struct _heap_header {
-    unsigned int cpu;  // zero for global heap
+    unsigned int cpu;
     superblock_h_t *bins[MAX_BINS];
 } heap_h_t;
 
