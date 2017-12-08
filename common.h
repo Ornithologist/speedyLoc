@@ -24,7 +24,7 @@
 
 #define MAX_BINS 64  // FIXME: number of size classes
 #define FLAT_CLASS_NO 377
-#define SYS_CORE_COUNT 1    // default val
+#define SYS_CORE_COUNT 16   // default val
 #define SYS_PAGE_SIZE 4096  // default val
 #define MAX_SML_SIZE 1024
 #define MAX_LRG_SIZE 4096
@@ -47,11 +47,12 @@ typedef struct _block_header {
 /*
  * struct for a superblock of a (heap, size_class)
  * @attri size_class: size class
- * @attri base_block: addr for the first block_h_t
+ * @attri head_block: addr for the first block_h_t
  */
 typedef struct _superblock_header {
     unsigned int size_class;
-    void *base_block;
+    void *head_block;
+    struct _superblock_header *next;  // by default NULL
 } superblock_h_t;
 
 /*
@@ -97,6 +98,8 @@ void *initialize_realloc(void *ptr, size_t size, const void *caller);
 void *initialize_calloc(size_t nmemb, size_t size, const void *caller);
 int initialize_malloc();
 int initialize_heaps();
+heap_h_t *create_heap(int cpu);
+superblock_h_t *create_superblock(size_t bk_size, int sc, int pages);
 int initialize_size_classes();
 
 typedef void *(*__malloc_hook_t)(size_t size, const void *caller);
@@ -115,7 +118,9 @@ extern long sys_page_size;
 extern int sys_page_shift;
 extern int sys_core_count;
 extern int malloc_initialized;
+extern int num_size_classes;
 extern __thread int restartable;
+extern heap_h_t *cpu_heaps[SYS_CORE_COUNT + 1];
 extern char class_array_[FLAT_CLASS_NO];
 extern size_t class_to_size_[MAX_BINS];
 extern size_t class_to_pages_[MAX_BINS];

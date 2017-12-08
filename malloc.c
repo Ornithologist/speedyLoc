@@ -15,9 +15,11 @@ long sys_page_size = SYS_PAGE_SIZE;
 int sys_page_shift = 16;
 int sys_core_count = SYS_CORE_COUNT;
 int malloc_initialized = 0;
+int num_size_classes;
 char class_array_[FLAT_CLASS_NO];
 size_t class_to_size_[MAX_BINS];
 size_t class_to_pages_[MAX_BINS];
+heap_h_t *cpu_heaps[SYS_CORE_COUNT + 1];
 
 // per thread global
 __thread int restartable;
@@ -64,6 +66,7 @@ int lg_floor(size_t s)
     return log;
 }
 
+// utility function to find the number of blocks
 int size_to_no_blocks(size_t size)
 {
     if (size == 0) return 0;
@@ -142,7 +145,7 @@ int initialize_size_classes()
 
     // mapping arrays
     int next_size = 0;
-    int num_size_classes = sc;
+    num_size_classes = sc;
     int c;
     for (c = 1; c < num_size_classes; c++) {
         int max_size_in_class = class_to_size_[c];
@@ -226,8 +229,62 @@ int initialize_malloc()
  */
 int initialize_heaps()
 {
-    int cpu = sched_getcpu();
-    printf("currently running on %d\n", cpu);
+    int cpu = sched_getcpu(), i;
+    printf("currently running on CPU %d\n", cpu);
+
+    for (i = 0; i <= sys_core_count; i++) {
+        cpu_heaps[i] = create_heap(i);
+    }
+}
+
+heap_h_t *create_heap(int cpu)
+{
+    heap_h_t hp;
+    hp.cpu = cpu;
+    int i;
+    for (i = 1; i < num_size_classes; i++) {
+        int sc = i;
+        size_t pages = class_to_pages_[sc];
+        size_t bk_size = class_to_size_[sc];
+        hp.bins[i] = create_superblock(bk_size, sc, pages);
+    }
+    return &hp;
+}
+
+/*
+ * create a superblock for a given size class;
+ * allocate $pages number of pages;
+ * create linked list of blocks;
+ */
+superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
+{
+    // allocate pages to fill the superblock, with some wasted spaces
+    int size_to_allocate = sys_page_size * pages + sizeof(superblock_h_t);
+    int blocks_to_add = (sys_page_size * pages) / (int)bk_size;
+    superblock_h_t *sbptr;
+    if ((sbptr = (superblock_h_t *)sbrk(size_to_allocate)) == NULL) return NULL;
+
+    // ini the superblock
+    void *head_addr = (void *)((char *)sbptr + sizeof(superblock_h_t));
+    sbptr->size_class = sc;
+    sbptr->head_block = head_addr;
+    sbptr->next = NULL;
+
+    // create a linked list of blocks
+    void *itr = head_addr;
+    block_h_t *prev = NULL;
+    while (itr < (head_addr + blocks_to_add * bk_size)) {
+        // create cur
+        block_h_t *cur = (block_h_t *)itr;
+        cur->status = VACANT;
+        cur->next = NULL;
+        // link prev
+        if (prev != NULL) prev->next = cur;
+        // swap and move on
+        prev = cur;
+        itr += bk_size;
+    }
+    return sbptr;
 }
 
 /*
