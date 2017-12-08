@@ -229,9 +229,7 @@ int initialize_malloc()
  */
 int initialize_heaps()
 {
-    int cpu = sched_getcpu(), i;
-    printf("currently running on CPU %d\n", cpu);
-
+    int i;  // when i = sysc_core_count, the heap is global
     for (i = 0; i <= sys_core_count; i++) {
         cpu_heaps[i] = create_heap(i);
     }
