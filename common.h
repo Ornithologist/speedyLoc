@@ -13,8 +13,6 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
-#define _GNU_SOURCE
-
 #define SUCCESS 0
 #define FAILURE 1
 #define IN_USE 1
@@ -24,8 +22,8 @@
 
 #define MAX_BINS 64  // FIXME: number of size classes
 #define FLAT_CLASS_NO 377
-#define SYS_CORE_COUNT 16   // default val
-#define SYS_PAGE_SIZE 4096  // default val
+#define MAX_SYS_CORE_COUNT 64  // default val
+#define SYS_PAGE_SIZE 4096     // default val
 #define MAX_SML_SIZE 1024
 #define MAX_LRG_SIZE 4096
 #define SML_ALIGN 8
@@ -103,7 +101,7 @@ void *initialize_calloc(size_t nmemb, size_t size, const void *caller);
 int initialize_malloc();
 int initialize_heaps();
 int initialize_size_classes();
-heap_h_t *create_heap(int cpu);
+void create_heap(heap_h_t *hp, int cpu);
 superblock_h_t *create_superblock(size_t bk_size, int sc, int pages);
 superblock_h_t *retrieve_superblock_from_global_heap(int sc);
 block_h_t *retrieve_block(int sc);
@@ -128,7 +126,7 @@ extern int malloc_initialized;
 extern int num_size_classes;
 extern __thread int restartable;
 extern __thread int my_cpu;
-extern heap_h_t *cpu_heaps[SYS_CORE_COUNT + 1];
+extern heap_h_t cpu_heaps[MAX_SYS_CORE_COUNT + 1];
 extern char class_array_[FLAT_CLASS_NO];
 extern size_t class_to_size_[MAX_BINS];
 extern size_t class_to_pages_[MAX_BINS];

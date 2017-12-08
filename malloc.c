@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <errno.h>
 #include <math.h>
 #include <pthread.h>
@@ -13,20 +14,17 @@
 // ini globals
 long sys_page_size = SYS_PAGE_SIZE;
 int sys_page_shift = 16;
-int sys_core_count = SYS_CORE_COUNT;
+int sys_core_count = MAX_SYS_CORE_COUNT;
 int malloc_initialized = 0;
 int num_size_classes;
 char class_array_[FLAT_CLASS_NO];
 size_t class_to_size_[MAX_BINS];
 size_t class_to_pages_[MAX_BINS];
-heap_h_t *cpu_heaps[SYS_CORE_COUNT + 1];
+heap_h_t cpu_heaps[MAX_SYS_CORE_COUNT + 1];
 
 // per thread global
 __thread int restartable = 0;
 __thread int my_cpu = 0;
-
-// hook
-__malloc_hook_t __malloc_hook = (__malloc_hook_t)initialize_lib;
 
 // Sizes <= 1024 have an alignment >= 8.  So for such sizes we have an
 // array indexed by ceil(size/8).  Sizes > 1024 have an alignment >= 128.
@@ -157,38 +155,11 @@ int initialize_size_classes()
         next_size = max_size_in_class + SML_ALIGN;
     }
 
-    printf(
-        "Below is a list of (size class idx, max bytes allowed in class) "
-        "pairs\n");
-    int i;
-    for (i = 0; i < num_size_classes; i++) {
-        printf("%d:%d ", i, (int)class_to_size_[i]);
-    }
-    printf(
-        "\nBelow is a list of (size class idx, number of pages needed) "
-        "pairs\n");
-    for (i = 0; i < num_size_classes; i++) {
-        printf("%d:%d ", i, (int)class_to_pages_[i]);
-    }
-    printf("\n");
     return SUCCESS;
 }
 
 /*
- * initialize libmalloc; takes place on the first malloc call;
- * create heap for each CPU core;
- */
-void *initialize_lib(size_t size, const void *caller)
-{
-    if (initialize_malloc()) {
-        return NULL;
-    }
-    __malloc_hook = NULL;
-    return malloc(size);
-}
-
-/*
- * confirm SYS_PAGE_SIZE and SYS_CORE_COUNT;
+ * confirm sys_page_size and sys_core_count;
  * initialize HEAP per CPU core, plus global HEAP;
  */
 int initialize_malloc()
@@ -204,7 +175,7 @@ int initialize_malloc()
 
     // confirm number of cores
     if ((sys_core_count = sysconf(_SC_NPROCESSORS_ONLN)) == -1)
-        sys_core_count = SYS_CORE_COUNT;
+        sys_core_count = MAX_SYS_CORE_COUNT;
 
     // ini size class mappings
     if ((out = initialize_size_classes()) == FAILURE) {
@@ -232,22 +203,25 @@ int initialize_heaps()
 {
     int i;  // when i = sysc_core_count, the heap is global
     for (i = 0; i <= sys_core_count; i++) {
-        cpu_heaps[i] = create_heap(i);
+        create_heap(&cpu_heaps[i], i);
     }
 }
 
-heap_h_t *create_heap(int cpu)
+/*
+ * create a heap for a particular core;
+ * initiates the superblocks for each size class;
+ */
+void create_heap(heap_h_t *hp, int cpu)
 {
-    heap_h_t hp;
-    hp.cpu = cpu;
+    hp->cpu = cpu;
     int i;
     for (i = 1; i < num_size_classes; i++) {
         int sc = i;
         size_t pages = class_to_pages_[sc];
         size_t bk_size = class_to_size_[sc];
-        hp.bins[i] = create_superblock(bk_size, sc, pages);
+        hp->bins[i] = create_superblock(bk_size, sc, pages);
     }
-    return &hp;
+    return;
 }
 
 /*
@@ -293,7 +267,7 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
  */
 superblock_h_t *retrieve_superblock_from_global_heap(int sc)
 {
-    return cpu_heaps[sys_core_count]->bins[sc];
+    return cpu_heaps[sys_core_count].bins[sc];
 }
 
 /*
@@ -307,7 +281,7 @@ block_h_t *retrieve_block(int sc)
     restartable = 0;
     if (bptr != NULL) return bptr;
     // super block is empty, search in global heap
-    superblock_h_t *local_sbptr = cpu_heaps[my_cpu]->bins[sc];
+    superblock_h_t *local_sbptr = cpu_heaps[my_cpu].bins[sc];
     superblock_h_t *global_sbptr = retrieve_superblock_from_global_heap(sc);
     if (global_sbptr == NULL) {
         // if all global superblocks are full, construct new
@@ -324,12 +298,12 @@ block_h_t *retrieve_block(int sc)
     // IF SUCCESS: move local_sbptr to global heap | (DONE)
     // move local to global heap when it's not completely empty
     if (local_sbptr->local_head != NULL || local_sbptr->remote_head != NULL) {
-        cpu_heaps[sys_core_count]->bins[sc] = local_sbptr;
+        cpu_heaps[sys_core_count].bins[sc] = local_sbptr;
         local_sbptr->next = global_sbptr->next;
     }
 
     // move global to local heap
-    cpu_heaps[my_cpu]->bins[sc] = global_sbptr;  // move to local
+    cpu_heaps[my_cpu].bins[sc] = global_sbptr;  // move to local
     global_sbptr->next = NULL;
 
     // retry
@@ -346,43 +320,66 @@ block_h_t *restartable_critical_section(int sc)
     // find superblock of the requested size class in current core
     my_cpu = sched_getcpu();
     restartable = 1;
-    heap_h_t *hp = cpu_heaps[my_cpu];
-    superblock_h_t *sbptr = hp->bins[sc];
+    heap_h_t hp = cpu_heaps[my_cpu];
+    superblock_h_t *sbptr = hp.bins[sc];
     if (sbptr == NULL) return NULL;
 
     // pop the local head off
     block_h_t *bptr = (block_h_t *)sbptr->local_head;
     sbptr->local_head = (void *)bptr->next;
-    return sbptr;
+    return bptr;
 }
 
 /*
- * assign hook; check for initialize state for current thread;
- * convert size to order, and call corresponding handler;
+ * ask system for memory using mmap;
+ * construct a block out of it and return;
+ */
+block_h_t *create_big_block(size_t size)
+{
+    void *mmapped;
+    block_h_t *bptr;
+
+    if ((mmapped = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)) == MAP_FAILED) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    bptr = (block_h_t *)mmapped;
+    bptr->status = VACANT;
+    bptr->next = NULL;
+    return bptr;
+}
+
+/*
+ * assign hook; compute size class;
+ * retrieve block and return;
  */
 void *__lib_malloc(size_t size)
 {
     block_h_t *ret_addr = NULL;
-
-    // hook
-    __malloc_hook_t lib_hook = __malloc_hook;
-    if (lib_hook != NULL) {
-        return (*lib_hook)(size, __builtin_return_address(0));
+    if (initialize_malloc() != SUCCESS) {
+        errno = ENOMEM;
+        return NULL;
     }
 
-    // get size class
+    // get size class; retrieve block
     size += sizeof(block_h_t);
     int sc, sc_idx = class_index(size);
     if (sc_idx < 0) {
-        // TODO: construct and return a super block
-        return NULL;
+        // construct and return a big block
+        ret_addr = create_big_block(size);
+    } else {
+        // retreive block from local heap
+        sc = class_array_[sc_idx];
+        ret_addr = retrieve_block(sc);
     }
-    sc = class_array_[sc_idx];
 
-    // retreive block
-    ret_addr = retrieve_block(sc);
-    ret_addr = (void *)((char *)ret_addr + sizeof(block_h_t));
-
+    // mark block in_use; move pointer ahead for header size
+    if (ret_addr != NULL) {
+        ret_addr->status = IN_USE;
+        ret_addr = (void *)((char *)ret_addr + sizeof(block_h_t));
+    }
     return ret_addr;
 }
 
