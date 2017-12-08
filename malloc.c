@@ -22,7 +22,8 @@ size_t class_to_pages_[MAX_BINS];
 heap_h_t *cpu_heaps[SYS_CORE_COUNT + 1];
 
 // per thread global
-__thread int restartable;
+__thread int restartable = 0;
+__thread int my_cpu = 0;
 
 // hook
 __malloc_hook_t __malloc_hook = (__malloc_hook_t)initialize_lib;
@@ -286,21 +287,73 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
     return sbptr;
 }
 
+/*
+ * this function assumes global heap superblocks can never be empty
+ * returns the head of global heap's superblock linked list for a size class
+ */
+superblock_h_t *retrieve_superblock_from_global_heap(int sc)
+{
+    return cpu_heaps[sys_core_count]->bins[sc];
+}
+
+/*
+ * recursive call to fetch a free block for the requested sc;
+ * keeps retrying until a superblock that fulfills the request
+ * is found.
+ */
 block_h_t *retrieve_block(int sc)
 {
     block_h_t *bptr = restartable_critical_section(sc);
+    restartable = 0;
     if (bptr != NULL) return bptr;
     // super block is empty, search in global heap
-    superblock_h_t *sbptr = search_global_heap(sc);
-    if (sbptr == NULL) {
+    superblock_h_t *local_sbptr = cpu_heaps[my_cpu]->bins[sc];
+    superblock_h_t *global_sbptr = retrieve_superblock_from_global_heap(sc);
+    if (global_sbptr == NULL) {
         // if all global superblocks are full, construct new
         size_t max_size = class_to_size_[sc];
         int pages = class_to_pages_[sc];
-        sbptr = create_superblock(max_size, sc, pages);
+        global_sbptr = create_superblock(max_size, sc, pages);
     } else {
-        // TODO: lock sbptr and merge its remote list into local list
+        // TODO: lock global_sbptr and merge its remote list into local list
     }
-    // TODO:
+
+    // (?) Do we need lock here
+    // DO: move global_sbptr to local heap
+    // IF FAIL: move global_sbptr to global heap | (?) how can it fail
+    // IF SUCCESS: move local_sbptr to global heap | (DONE)
+    // move local to global heap when it's not completely empty
+    if (local_sbptr->local_head != NULL || local_sbptr->remote_head != NULL) {
+        cpu_heaps[sys_core_count]->bins[sc] = local_sbptr;
+        local_sbptr->next = global_sbptr->next;
+    }
+
+    // move global to local heap
+    cpu_heaps[my_cpu]->bins[sc] = global_sbptr;  // move to local
+    global_sbptr->next = NULL;
+
+    // retry
+    return retrieve_block(sc);
+}
+
+/*
+ * restartable critical section
+ * enters fast path if return value is not NULL
+ * enters slow path (retry on global heap) if NULL returned
+ */
+block_h_t *restartable_critical_section(int sc)
+{
+    // find superblock of the requested size class in current core
+    my_cpu = sched_getcpu();
+    restartable = 1;
+    heap_h_t *hp = cpu_heaps[my_cpu];
+    superblock_h_t *sbptr = hp->bins[sc];
+    if (sbptr == NULL) return NULL;
+
+    // pop the local head off
+    block_h_t *bptr = (block_h_t *)sbptr->local_head;
+    sbptr->local_head = (void *)bptr->next;
+    return sbptr;
 }
 
 /*

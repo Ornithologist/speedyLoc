@@ -105,7 +105,7 @@ int initialize_heaps();
 int initialize_size_classes();
 heap_h_t *create_heap(int cpu);
 superblock_h_t *create_superblock(size_t bk_size, int sc, int pages);
-superblock_h_t *search_global_heap(int sc);
+superblock_h_t *retrieve_superblock_from_global_heap(int sc);
 block_h_t *retrieve_block(int sc);
 block_h_t *restartable_critical_section(int sc);
 
@@ -127,6 +127,7 @@ extern int sys_core_count;
 extern int malloc_initialized;
 extern int num_size_classes;
 extern __thread int restartable;
+extern __thread int my_cpu;
 extern heap_h_t *cpu_heaps[SYS_CORE_COUNT + 1];
 extern char class_array_[FLAT_CLASS_NO];
 extern size_t class_to_size_[MAX_BINS];
