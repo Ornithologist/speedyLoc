@@ -265,7 +265,8 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
     // ini the superblock
     void *head_addr = (void *)((char *)sbptr + sizeof(superblock_h_t));
     sbptr->size_class = sc;
-    sbptr->head_block = head_addr;
+    sbptr->local_head = head_addr;
+    sbptr->remote_head = NULL;
     sbptr->next = NULL;
 
     // create a linked list of blocks
@@ -285,6 +286,23 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
     return sbptr;
 }
 
+block_h_t *retrieve_block(int sc)
+{
+    block_h_t *bptr = restartable_critical_section(sc);
+    if (bptr != NULL) return bptr;
+    // super block is empty, search in global heap
+    superblock_h_t *sbptr = search_global_heap(sc);
+    if (sbptr == NULL) {
+        // if all global superblocks are full, construct new
+        size_t max_size = class_to_size_[sc];
+        int pages = class_to_pages_[sc];
+        sbptr = create_superblock(max_size, sc, pages);
+    } else {
+        // TODO: lock sbptr and merge its remote list into local list
+    }
+    // TODO:
+}
+
 /*
  * assign hook; check for initialize state for current thread;
  * convert size to order, and call corresponding handler;
@@ -292,22 +310,27 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
 void *__lib_malloc(size_t size)
 {
     block_h_t *ret_addr = NULL;
-    void *mmapped;
 
-    // hook & thread ini
+    // hook
     __malloc_hook_t lib_hook = __malloc_hook;
     if (lib_hook != NULL) {
         return (*lib_hook)(size, __builtin_return_address(0));
     }
 
-    if ((mmapped = (mmap(NULL, size, PROT_READ | PROT_WRITE,
-                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) == MAP_FAILED) {
-        errno = ENOMEM;
+    // get size class
+    size += sizeof(block_h_t);
+    int sc, sc_idx = class_index(size);
+    if (sc_idx < 0) {
+        // TODO: construct and return a super block
         return NULL;
     }
+    sc = class_array_[sc_idx];
 
-    ret_addr = (block_h_t *)mmapped;
-    return mmapped;
+    // retreive block
+    ret_addr = retrieve_block(sc);
+    ret_addr = (void *)((char *)ret_addr + sizeof(block_h_t));
+
+    return ret_addr;
 }
 
 void *malloc(size_t size) __attribute__((weak, alias("__lib_malloc")));

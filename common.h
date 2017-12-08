@@ -47,11 +47,15 @@ typedef struct _block_header {
 /*
  * struct for a superblock of a (heap, size_class)
  * @attri size_class: size class
- * @attri head_block: addr for the first block_h_t
+ * @attri local_head: addr for the first local block_h_t
+ * @attri remote_head: addr for the first remote (freed) block_h_t
+ * @attri next: points to the next same-sized superblock, only used in global
+ * heap
  */
 typedef struct _superblock_header {
     unsigned int size_class;
-    void *head_block;
+    void *local_head;
+    void *remote_head;
     struct _superblock_header *next;  // by default NULL
 } superblock_h_t;
 
@@ -98,9 +102,12 @@ void *initialize_realloc(void *ptr, size_t size, const void *caller);
 void *initialize_calloc(size_t nmemb, size_t size, const void *caller);
 int initialize_malloc();
 int initialize_heaps();
+int initialize_size_classes();
 heap_h_t *create_heap(int cpu);
 superblock_h_t *create_superblock(size_t bk_size, int sc, int pages);
-int initialize_size_classes();
+superblock_h_t *search_global_heap(int sc);
+block_h_t *retrieve_block(int sc);
+block_h_t *restartable_critical_section(int sc);
 
 typedef void *(*__malloc_hook_t)(size_t size, const void *caller);
 typedef void (*__free_hook_t)(void *ptr, const void *caller);
