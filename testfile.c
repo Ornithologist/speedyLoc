@@ -4,11 +4,11 @@
 
 int main(int argc, char** argv)
 {
-    printf("Hello!!\n");
-    int i;
-    for (i = 0; i < 1000000; i++) {
-        // printf("%d\n", i);
-    }
+    // printf("Hello!!\n");
+    // int i;
+    // for (i = 0; i < 1000000; i++) {
+    //     // printf("%d\n", i);
+    // }
     void* mem = malloc(1123);
     return 0;
 }
