@@ -47,14 +47,15 @@ typedef struct _block_header {
  * @attri size_class: size class
  * @attri local_head: addr for the first local block_h_t
  * @attri remote_head: addr for the first remote (freed) block_h_t
- * @attri next: points to the next same-sized superblock, only used in global
- * heap
+ * @attri next: points to the next same-sized superblock (for global heap)
+ * @attri lock: lock used in slow path
  */
 typedef struct _superblock_header {
     unsigned int size_class;
     void *local_head;
     void *remote_head;
     struct _superblock_header *next;  // by default NULL
+    pthread_mutex_t lock;
 } superblock_h_t;
 
 /*
@@ -126,9 +127,9 @@ extern int malloc_initialized;
 extern int num_size_classes;
 extern __thread int restartable;
 extern __thread int my_cpu;
-extern heap_h_t cpu_heaps[MAX_SYS_CORE_COUNT + 1];
 extern char class_array_[FLAT_CLASS_NO];
 extern size_t class_to_size_[MAX_BINS];
 extern size_t class_to_pages_[MAX_BINS];
+extern heap_h_t cpu_heaps[MAX_SYS_CORE_COUNT + 1];
 
 #endif

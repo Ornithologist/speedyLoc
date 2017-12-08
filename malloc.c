@@ -277,10 +277,11 @@ superblock_h_t *retrieve_superblock_from_global_heap(int sc)
  */
 block_h_t *retrieve_block(int sc)
 {
+    // FAST PATH: find one in local free list
     block_h_t *bptr = restartable_critical_section(sc);
     restartable = 0;
     if (bptr != NULL) return bptr;
-    // super block is empty, search in global heap
+    // SLOW PATH: super block is empty, search in global heap
     superblock_h_t *local_sbptr = cpu_heaps[my_cpu].bins[sc];
     superblock_h_t *global_sbptr = retrieve_superblock_from_global_heap(sc);
     if (global_sbptr == NULL) {
@@ -289,7 +290,21 @@ block_h_t *retrieve_block(int sc)
         int pages = class_to_pages_[sc];
         global_sbptr = create_superblock(max_size, sc, pages);
     } else {
-        // TODO: lock global_sbptr and merge its remote list into local list
+        // lock global_sbptr and merge its remote list into local list
+        pthread_mutex_lock(&global_sbptr->lock);
+        if (global_sbptr->local_head == NULL) {
+            global_sbptr->local_head = global_sbptr->remote_head;
+            global_sbptr->remote_head = NULL;
+        } else if (global_sbptr->remote_head != NULL) {
+            superblock_h_t *prev_itr, *itr = global_sbptr->local_head;
+            while (itr != NULL) {
+                prev_itr = itr;
+                itr = itr->next;
+            }
+            prev_itr->next = global_sbptr->remote_head;
+            global_sbptr->remote_head = NULL;
+        }
+        pthread_mutex_unlock(&global_sbptr->lock);
     }
 
     // (?) Do we need lock here
