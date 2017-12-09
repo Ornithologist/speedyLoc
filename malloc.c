@@ -1,7 +1,9 @@
 #define _GNU_SOURCE
+
 #include <errno.h>
 #include <math.h>
 #include <pthread.h>
+#include <sched.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -269,8 +271,9 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
  */
 void destory_superblock(superblock_h_t *sbptr)
 {
-    destory_superblock(&sbptr->lock);
-    sbptr = NULL;  // FIXME: really? this does not destory the instance
+    if (pthread_mutex_destroy(&sbptr->lock) == 0) {
+        sbptr = NULL;  // FIXME: really? this does not destory the instance
+    }
 }
 
 /*
@@ -291,7 +294,6 @@ block_h_t *retrieve_block(int sc)
 {
     // FAST PATH: find one in local free list
     block_h_t *bptr = restartable_critical_section(sc);
-    restartable = 0;
     if (bptr != NULL) return bptr;
     // SLOW PATH: super block is empty, search in global heap
     superblock_h_t *local_sbptr = cpu_heaps[my_cpu].bins[sc];
@@ -349,16 +351,26 @@ block_h_t *retrieve_block(int sc)
  */
 block_h_t *restartable_critical_section(int sc)
 {
-    // find superblock of the requested size class in current core
-    my_cpu = sched_getcpu();
     restartable = 1;
+
+    // sanity check. TODO: think of moving this outside
+    if (sc == 0) return NULL;
+
+    // get current CPU id
+    my_cpu = sched_getcpu();
+    if (my_cpu < 0) return NULL;
+
+    // find superblock of the requested size class in current core
     heap_h_t hp = cpu_heaps[my_cpu];
     superblock_h_t *sbptr = hp.bins[sc];
     if (sbptr == NULL) return NULL;
+    block_h_t *bptr = (block_h_t *)sbptr->local_head;
+    if (bptr == NULL) return NULL;
 
     // pop the local head off
-    block_h_t *bptr = (block_h_t *)sbptr->local_head;
     sbptr->local_head = (void *)bptr->next;
+    // update flag
+    restartable = 0;
     return bptr;
 }
 
@@ -405,6 +417,7 @@ void *__lib_malloc(size_t size)
         // retreive block from local heap
         sc = class_array_[sc_idx];
         ret_addr = retrieve_block(sc);
+        ret_addr->next = NULL;  // is this needed?
     }
 
     // mark block in_use; move pointer ahead for header size
