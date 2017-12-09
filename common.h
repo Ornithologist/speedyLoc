@@ -44,12 +44,14 @@ typedef struct _block_header {
 
 /*
  * struct for a superblock of a (heap, size_class)
+ * @attri in_use_count: number of blocks in use
  * @attri local_head: addr for the first local block_h_t
  * @attri remote_head: addr for the first remote (freed) block_h_t
  * @attri next: points to the next same-sized superblock (for global heap)
  * @attri lock: lock used in slow path
  */
 typedef struct _superblock_header {
+    int in_use_count;
     void *local_head;
     void *remote_head;
     struct _superblock_header *next;  // by default NULL
@@ -88,11 +90,14 @@ typedef struct _mallinfo {
     int fordblks;
 } mallinfo_t;
 
+// utilities
 int lg_floor(size_t size);  // only for size < 32 bits
 int size_to_no_blocks(size_t size);
 int size_to_class(size_t size);
 int class_index(size_t size);
 int size_to_alignment(size_t size);
+
+// ini functions
 void *initialize_lib(size_t size, const void *caller);
 void initialize_free(void *ptr, const void *caller);
 void *initialize_realloc(void *ptr, size_t size, const void *caller);
@@ -101,13 +106,19 @@ int initialize_malloc();
 int initialize_heaps();
 int initialize_size_classes();
 void create_heap(heap_h_t *hp, int cpu);
+
+// malloc arsenal
 void destory_superblock(superblock_h_t *sbptr);
 superblock_h_t *create_superblock(size_t bk_size, int sc, int pages);
 superblock_h_t *retrieve_superblock_from_global_heap(int sc);
 block_h_t *search_local_block(int sc);
 block_h_t *restartable_critical_section(int sc);
-superblock_h_t *retrieve_mamablock(block_h_t *bptr);
 
+// free arsenal
+superblock_h_t *retrieve_mamablock(block_h_t *bptr);
+int restartable_critical_section_free(superblock_h_t *mama_s, block_h_t *bptr);
+
+// TODO: clean me
 typedef void *(*__malloc_hook_t)(size_t size, const void *caller);
 typedef void (*__free_hook_t)(void *ptr, const void *caller);
 typedef void *(*__realloc_hook_t)(void *ptr, size_t size, const void *caller);

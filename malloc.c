@@ -241,6 +241,7 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
 
     // ini the superblock
     void *head_addr = (void *)((char *)sbptr + sizeof(superblock_h_t));
+    sbptr->in_use_count = 0;
     sbptr->local_head = head_addr;
     sbptr->remote_head = NULL;
     sbptr->next = NULL;
@@ -315,12 +316,12 @@ block_h_t *search_local_block(int sc)
             global_sbptr->local_head = global_sbptr->remote_head;
             global_sbptr->remote_head = NULL;
         } else if (global_sbptr->remote_head != NULL) {
-            superblock_h_t *prev_itr, *itr = global_sbptr->local_head;
+            block_h_t *prev_itr, *itr = (block_h_t *)global_sbptr->local_head;
             while (itr != NULL) {
                 prev_itr = itr;
                 itr = itr->next;
             }
-            prev_itr->next = global_sbptr->remote_head;
+            prev_itr->next = (block_h_t *)global_sbptr->remote_head;
             global_sbptr->remote_head = NULL;
         }
         pthread_mutex_unlock(&global_sbptr->lock);
@@ -371,22 +372,35 @@ block_h_t *restartable_critical_section(int sc)
     restartable = 1;
 
     // sanity check. TODO: think of moving this outside
-    if (sc == 0) return NULL;
+    if (sc == 0) {
+        restartable = 0;
+        return NULL;
+    }
 
     // get current CPU id
     my_cpu = sched_getcpu();
-    if (my_cpu < 0) return NULL;
+    if (my_cpu < 0) {
+        restartable = 0;
+        return NULL;
+    }
 
     // find superblock of the requested size class in current core
     heap_h_t hp = cpu_heaps[my_cpu];
     superblock_h_t *sbptr = hp.bins[sc];
-    if (sbptr == NULL) return NULL;
+    if (sbptr == NULL) {
+        restartable = 0;
+        return NULL;
+    }
     block_h_t *bptr = (block_h_t *)sbptr->local_head;
-    if (bptr == NULL) return NULL;
+    if (bptr == NULL) {
+        restartable = 0;
+        return NULL;
+    }
 
     // pop the local head off
     sbptr->local_head = (void *)bptr->next;
-    // update flag
+    // update flag and stats
+    sbptr->in_use_count++;
     restartable = 0;
     return bptr;
 }
