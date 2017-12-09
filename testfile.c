@@ -57,7 +57,7 @@ int main(int argc, char** argv)
 
     simpletest((void*)0);
 
-    multithread_test();
+    // multithread_test();
 
     return 0;
 }

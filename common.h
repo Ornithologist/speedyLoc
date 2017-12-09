@@ -104,8 +104,9 @@ void create_heap(heap_h_t *hp, int cpu);
 void destory_superblock(superblock_h_t *sbptr);
 superblock_h_t *create_superblock(size_t bk_size, int sc, int pages);
 superblock_h_t *retrieve_superblock_from_global_heap(int sc);
-block_h_t *retrieve_block(int sc);
+block_h_t *search_local_block(int sc);
 block_h_t *restartable_critical_section(int sc);
+superblock_h_t *retrieve_mamablock(block_h_t *bptr);
 
 typedef void *(*__malloc_hook_t)(size_t size, const void *caller);
 typedef void (*__free_hook_t)(void *ptr, const void *caller);

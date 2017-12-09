@@ -276,12 +276,18 @@ void destory_superblock(superblock_h_t *sbptr)
 }
 
 /*
- * this function assumes global heap superblocks can never be empty
- * returns the head of global heap's superblock linked list for a size class
+ * search from the head of global heap's superblock linked list
+ * for a size class, find a superblock that has either non-null
+ * local_head or non-null remote_head, else return NULL
  */
 superblock_h_t *retrieve_superblock_from_global_heap(int sc)
 {
-    return cpu_heaps[sys_core_count].bins[sc];
+    superblock_h_t *itr = cpu_heaps[sys_core_count].bins[sc], *prev_itr;
+    while (itr != NULL && itr->local_head == NULL && itr->remote_head == NULL) {
+        prev_itr = itr;
+        itr = itr->next;
+    }
+    return itr;
 }
 
 /*
@@ -289,7 +295,7 @@ superblock_h_t *retrieve_superblock_from_global_heap(int sc)
  * keeps retrying until a superblock that fulfills the request
  * is found.
  */
-block_h_t *retrieve_block(int sc)
+block_h_t *search_local_block(int sc)
 {
     // FAST PATH: find one in local free list
     block_h_t *bptr = restartable_critical_section(sc);
@@ -326,21 +332,33 @@ block_h_t *retrieve_block(int sc)
     // IF FAIL: move global_sbptr to global heap | (?) how can it fail
     // IF SUCCESS: move local_sbptr to global heap | (DONE)
 
-    // move local to global heap when it's not completely empty
-    if (local_sbptr->local_head != NULL || local_sbptr->remote_head != NULL) {
-        cpu_heaps[sys_core_count].bins[sc] = local_sbptr;
-        local_sbptr->next = global_sbptr->next;
-    } else {
-        // else, the local_sbptr is of no use, destroy
-        destory_superblock(local_sbptr);
+    // below is SUCCESS case
+    // move g to l
+    cpu_heaps[my_cpu].bins[sc] = global_sbptr;
+    // move l to g
+    superblock_h_t *itr = cpu_heaps[sys_core_count].bins[sc];
+    superblock_h_t *prev_itr = itr;
+    while (itr != NULL && ((char *)itr - (char *)global_sbptr) != 0) {
+        prev_itr = itr;
+        itr = itr->next;
     }
-
-    // move global to local heap
-    cpu_heaps[my_cpu].bins[sc] = global_sbptr;  // move to local
+    // link l to global heap's sc linked list
+    if (prev_itr == NULL) {
+        // if prev_itr is NULL, it's a new superblock, and global heap is empty
+        cpu_heaps[sys_core_count].bins[sc] = local_sbptr;
+    } else if (itr == NULL) {
+        // if itr is NULL, it's a new superblock, just append;
+        prev_itr->next = local_sbptr;
+    } else {
+        // neither is NULL, associate their nexts
+        prev_itr->next = local_sbptr;
+        local_sbptr->next = global_sbptr->next;
+    }
+    // finish moving g to l by NULLing the next of g (now l)
     global_sbptr->next = NULL;
 
     // retry
-    return retrieve_block(sc);
+    return search_local_block(sc);
 }
 
 /*
@@ -415,7 +433,7 @@ void *__lib_malloc(size_t size)
     } else {
         // retreive block from local heap
         sc = class_array_[sc_idx];
-        ret_addr = retrieve_block(sc);
+        ret_addr = search_local_block(sc);
         ret_addr->next = NULL;  // is this needed?
     }
 

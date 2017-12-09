@@ -12,23 +12,31 @@
 #include "common.h"
 
 /*
+ * validate that block is within heap's terrain, returns null if invalid
+ * return the pointer to the superblock where this block was given birth
+ */
+superblock_h_t *retrieve_mamablock(block_h_t *bptr) {}
+
+/*
  * retrieve memory block from the buddy system, or from mmapped regions;
- * for mmapped regions, unmap it; for buddy blocks, merge it with parent buddy;
+ * for mmapped regions, unmap it; for buddy blocks, merge it with parent
+ * buddy;
  */
 void __lib_free(void *mem_ptr)
 {
     if (initialize_malloc() != SUCCESS) {
         errno = ENOMEM;
-        return NULL;
+        return;
     }
 
-    block_h_t *block_ptr = NULL;
-    uint8_t sc;
+    superblock_h_t *mama_s;
+    block_h_t *block_ptr = (block_h_t *)((char *)mem_ptr - sizeof(block_h_t));
+    uint8_t sc = block_ptr->size_class;
 
-    // validate that block is within heap's terrain
-    // if ((block_ptr = validate_addr(mem_ptr)) == NULL) {
-    //     return;
-    // }
+    // validate & retrieve superblock
+    if ((mama_s = retrieve_mamablock(block_ptr)) == NULL) {
+        return;
+    }
 
     // destory immediately if large
     if (sc > MAX_BINS) {
@@ -36,7 +44,7 @@ void __lib_free(void *mem_ptr)
         return;
     }
 
-    // TODO: release small block
+    //
     return;
 }
 void free(void *mem_ptr) __attribute__((weak, alias("__lib_free")));
