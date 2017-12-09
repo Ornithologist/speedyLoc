@@ -75,6 +75,18 @@ int restartable_critical_section_free(superblock_h_t *mama_s, block_h_t *bptr)
 }
 
 /*
+ * lock mama superblock;
+ * push to-be-freed block to the remote free list of its mama superblock
+ */
+void add_block_to_remote(superblock_h_t *mama_s, block_h_t *bptr)
+{
+    pthread_mutex_lock(&mama_s->lock);
+    bptr->next = (block_h_t *)mama_s->remote_head;
+    mama_s->remote_head = (void *)bptr;
+    pthread_mutex_unlock(&mama_s->lock);
+}
+
+/*
  * retrieve memory block from the buddy system, or from mmapped regions;
  * for mmapped regions, unmap it; for buddy blocks, merge it with parent
  * buddy;
@@ -86,6 +98,7 @@ void __lib_free(void *mem_ptr)
         return;
     }
 
+    if (mem_ptr == NULL) return;
     superblock_h_t *mama_s;
     block_h_t *bptr = (block_h_t *)((char *)mem_ptr - sizeof(block_h_t));
     uint8_t sc = bptr->size_class;
@@ -111,7 +124,11 @@ void __lib_free(void *mem_ptr)
     }
 
     // SLOW PATH: lock mama_s, add bptr to its 'remote' free list
-    // TODO: add the ^ logic!
+    add_block_to_remote(mama_s, bptr);
+
+    // TODO: destory mama_s,
+    // when: mama_s->in_use_count = 0, and global_heap has too many
+    // completely free superblocks (whose in_use_count = 0)
 
     return;
 }
