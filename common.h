@@ -34,24 +34,22 @@
 
 /*
  * struct for a memory block in the buddy system
- * @attri status: IN_USE (returned by malloc) / VACANT (free to use)
+ * @attri size_class: size class from 0 to MAX_BINS
  * @attri next: pointer to the cloest next block with the same size
  */
 typedef struct _block_header {
-    uint8_t status;
+    uint8_t size_class;
     struct _block_header *next;
 } block_h_t;
 
 /*
  * struct for a superblock of a (heap, size_class)
- * @attri size_class: size class
  * @attri local_head: addr for the first local block_h_t
  * @attri remote_head: addr for the first remote (freed) block_h_t
  * @attri next: points to the next same-sized superblock (for global heap)
  * @attri lock: lock used in slow path
  */
 typedef struct _superblock_header {
-    unsigned int size_class;
     void *local_head;
     void *remote_head;
     struct _superblock_header *next;  // by default NULL

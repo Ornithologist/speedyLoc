@@ -241,7 +241,6 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
 
     // ini the superblock
     void *head_addr = (void *)((char *)sbptr + sizeof(superblock_h_t));
-    sbptr->size_class = sc;
     sbptr->local_head = head_addr;
     sbptr->remote_head = NULL;
     sbptr->next = NULL;
@@ -255,7 +254,7 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
     while (itr < (head_addr + blocks_to_add * bk_size)) {
         // create cur
         block_h_t *cur = (block_h_t *)itr;
-        cur->status = VACANT;
+        cur->size_class = sc;
         cur->next = NULL;
         // link prev
         if (prev != NULL) prev->next = cur;
@@ -390,7 +389,7 @@ block_h_t *create_big_block(size_t size)
     }
 
     bptr = (block_h_t *)mmapped;
-    bptr->status = VACANT;
+    bptr->size_class = MAX_BINS + 1;  // FIXME: do we need plus one?
     bptr->next = NULL;
     return bptr;
 }
@@ -420,9 +419,8 @@ void *__lib_malloc(size_t size)
         ret_addr->next = NULL;  // is this needed?
     }
 
-    // mark block in_use; move pointer ahead for header size
+    // move pointer ahead for header size
     if (ret_addr != NULL) {
-        ret_addr->status = IN_USE;
         ret_addr = (void *)((char *)ret_addr + sizeof(block_h_t));
     }
     return ret_addr;

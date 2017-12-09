@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define NUM_THREADS 200
+#define NUM_THREADS 500
 
 void* simpletest(void* idx)
 {
