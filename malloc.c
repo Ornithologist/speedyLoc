@@ -243,6 +243,9 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
     sbptr->local_head = head_addr;
     sbptr->remote_head = NULL;
     sbptr->next = NULL;
+    if (pthread_mutex_init(&sbptr->lock, NULL) != 0) {
+        return NULL;
+    }
 
     // create a linked list of blocks
     void *itr = head_addr;
@@ -259,6 +262,15 @@ superblock_h_t *create_superblock(size_t bk_size, int sc, int pages)
         itr += bk_size;
     }
     return sbptr;
+}
+
+/*
+ * destorys an empty superblock and the mutext lock
+ */
+void destory_superblock(superblock_h_t *sbptr)
+{
+    destory_superblock(&sbptr->lock);
+    sbptr = NULL;  // FIXME: really? this does not destory the instance
 }
 
 /*
@@ -307,14 +319,19 @@ block_h_t *retrieve_block(int sc)
         pthread_mutex_unlock(&global_sbptr->lock);
     }
 
-    // (?) Do we need lock here
+    // (?) Do we need lock here, suppose another thread from another core
+    // comes in and claim global_sbptr, it will be shard by two cores.
     // DO: move global_sbptr to local heap
     // IF FAIL: move global_sbptr to global heap | (?) how can it fail
     // IF SUCCESS: move local_sbptr to global heap | (DONE)
+
     // move local to global heap when it's not completely empty
     if (local_sbptr->local_head != NULL || local_sbptr->remote_head != NULL) {
         cpu_heaps[sys_core_count].bins[sc] = local_sbptr;
         local_sbptr->next = global_sbptr->next;
+    } else {
+        // else, the local_sbptr is of no use, destroy
+        destory_superblock(local_sbptr);
     }
 
     // move global to local heap
