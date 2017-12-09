@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define NUM_THREADS 500
+#define NUM_THREADS 200
 
 void* simpletest(void* idx)
 {
     long id = (long)idx;
-    printf("------------TEST CASE %ld----------\n", id);
-    printf("Creating array of 100 integers\n");
+    // printf("------------TEST CASE %ld----------\n", id);
+    // printf("Creating array of 100 integers\n");
     int* array = (int*)malloc(100 * sizeof(int));
     int i;
     for (i = 0; i < 100; i++) {
@@ -21,11 +21,11 @@ void* simpletest(void* idx)
     assert(array[1] == 9999);
     assert(array[23] == 2432);
     assert(array[81] == 13);
-    printf("index 1 has %d\n", array[1]);
-    printf("index 81 has %d\n", array[81]);
-    printf("index 23 has %d\n", array[23]);
-    printf("Successfully allocated an array\n");
-    printf("---------END TEST CASE %ld---------\n", id);
+    // printf("index 1 has %d\n", array[1]);
+    // printf("index 81 has %d\n", array[81]);
+    // printf("index 23 has %d\n", array[23]);
+    // printf("Successfully allocated an array\n");
+    // printf("---------END TEST CASE %ld---------\n", id);
 }
 
 void multithread_test()
@@ -34,10 +34,10 @@ void multithread_test()
     int rc;
     long t;
     for (t = 0; t < NUM_THREADS; t++) {
-        printf("In main: creating thread %ld\n", t);
+        // printf("In main: creating thread %ld\n", t);
         rc = pthread_create(&threads[t], NULL, simpletest, (void*)(t + 1));
         if (rc) {
-            printf("ERROR; return code from pthread_create() is %d\n", rc);
+            // printf("ERROR; return code from pthread_create() is %d\n", rc);
             exit(-1);
         }
     }
@@ -57,7 +57,7 @@ int main(int argc, char** argv)
 
     simpletest((void*)0);
 
-    // multithread_test();
+    multithread_test();
 
     return 0;
 }

@@ -119,17 +119,18 @@ superblock_h_t *retrieve_mamablock(block_h_t *bptr);
 int restartable_critical_section_free(superblock_h_t *mama_s, block_h_t *bptr);
 
 // TODO: clean me
-typedef void *(*__malloc_hook_t)(size_t size, const void *caller);
-typedef void (*__free_hook_t)(void *ptr, const void *caller);
-typedef void *(*__realloc_hook_t)(void *ptr, size_t size, const void *caller);
-typedef void *(*__calloc_hook_t)(size_t nmemb, size_t size, const void *caller);
+// typedef void *(*__malloc_hook_t)(size_t size, const void *caller);
+// typedef void (*__free_hook_t)(void *ptr, const void *caller);
+// typedef void *(*__realloc_hook_t)(void *ptr, size_t size, const void
+// *caller); typedef void *(*__calloc_hook_t)(size_t nmemb, size_t size, const
+// void *caller);
 
 void *__lib_malloc(size_t size);    // le alias
 extern void __lib_free(void *mem);  // le alias
 extern void *malloc(size_t size);
 extern void free(void *mem_ptr);
-extern void *calloc(size_t nmemb, size_t size);
-extern void *realloc(void *ptr, size_t size);
+// extern void *calloc(size_t nmemb, size_t size);
+// extern void *realloc(void *ptr, size_t size);
 
 extern long sys_page_size;
 extern int sys_page_shift;

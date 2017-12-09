@@ -14,8 +14,11 @@ lib: libmalloc.so
 # libmalloc.so: malloc.o free.o calloc.o realloc.o malloc_stats.o mallinfo.o
 # 	$(CC) -g -o0 -shared -Wl,--unresolved-symbols=ignore-all malloc.o free.o calloc.o realloc.o malloc_stats.o mallinfo.o -o libmalloc.so $(CFLAGS_AFT)
 
-libmalloc.so: malloc_test.o
-		$(CC) -g -o0 -shared -Wl,--unresolved-symbols=ignore-all malloc_test.o  -o libmalloc.so $(CFLAGS_AFT)
+libmalloc.so: malloc.o free.o
+	$(CC) -g -o0 -shared -Wl,--unresolved-symbols=ignore-all malloc.o free.o -o libmalloc.so $(CFLAGS_AFT)
+
+# libmalloc.so: malloc_test.o
+# 		$(CC) -g -o0 -shared -Wl,--unresolved-symbols=ignore-all malloc_test.o  -o libmalloc.so $(CFLAGS_AFT)
 
 testfile: testfile.o
 	$(CC) $(CFLAGS) $< -o $@ $(CFLAGS_AFT)
