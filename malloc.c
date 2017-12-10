@@ -28,6 +28,13 @@ heap_h_t cpu_heaps[MAX_SYS_CORE_COUNT + 1];
 __thread int restartable = 0;
 __thread int my_cpu = 0;
 
+void myprint(unsigned long val)
+{
+    char buf[1024];
+    snprintf(buf, 1024, "%lu printed\n", val);
+    write(STDOUT_FILENO, buf, strlen(buf) + 1);
+}
+
 // Sizes <= 1024 have an alignment >= 8.  So for such sizes we have an
 // array indexed by ceil(size/8).  Sizes > 1024 have an alignment >= 128.
 // So for these larger sizes we have an array indexed by ceil(size/128).
@@ -337,23 +344,28 @@ block_h_t *search_local_block(int sc)
     // move g to l
     cpu_heaps[my_cpu].bins[sc] = global_sbptr;
     // move l to g
+    local_sbptr->next = NULL;
     superblock_h_t *itr = cpu_heaps[sys_core_count].bins[sc];
-    superblock_h_t *prev_itr = itr;
+    superblock_h_t *prev_itr = NULL;
     while (itr != NULL && ((char *)itr - (char *)global_sbptr) != 0) {
         prev_itr = itr;
         itr = itr->next;
     }
     // link l to global heap's sc linked list
-    if (prev_itr == NULL) {
-        // if prev_itr is NULL, it's a new superblock, and global heap is empty
+    if (prev_itr == NULL && itr == NULL) {
+        // never entered while loop, g is new, and global heap is empty
         cpu_heaps[sys_core_count].bins[sc] = local_sbptr;
     } else if (itr == NULL) {
-        // if itr is NULL, it's a new superblock, just append;
+        // loop entered but exhausted, g is new, just append l to the end;
         prev_itr->next = local_sbptr;
     } else {
-        // neither is NULL, associate their nexts
-        prev_itr->next = local_sbptr;
-        local_sbptr->next = global_sbptr->next;
+        // itr is g, associate their nexts
+        if (prev_itr == NULL) {  // special case, first node hit
+            cpu_heaps[sys_core_count].bins[sc] = local_sbptr;
+        } else {
+            prev_itr->next = local_sbptr;
+        }
+        local_sbptr->next = itr->next;
     }
     // finish moving g to l by NULLing the next of g (now l)
     global_sbptr->next = NULL;

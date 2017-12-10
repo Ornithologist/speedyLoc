@@ -5,11 +5,12 @@
 #include <unistd.h>
 
 #define NUM_THREADS 200
+#define ROUNDS 2000
 
 void* simpletest(void* idx)
 {
     long id = (long)idx;
-    // printf("------------TEST CASE %ld----------\n", id);
+    printf("------------TEST CASE %ld----------\n", id);
     // printf("Creating array of 100 integers\n");
     int* array = (int*)malloc(100 * sizeof(int));
     int i;
@@ -25,7 +26,7 @@ void* simpletest(void* idx)
     // printf("index 81 has %d\n", array[81]);
     // printf("index 23 has %d\n", array[23]);
     // printf("Successfully allocated an array\n");
-    // printf("---------END TEST CASE %ld---------\n", id);
+    printf("---------END TEST CASE %ld---------\n", id);
 }
 
 void multithread_test()
@@ -46,6 +47,14 @@ void multithread_test()
     pthread_exit(NULL);
 }
 
+void heavy_single_thread_test()
+{
+    long i;
+    for (i = 0; i < ROUNDS; i++) {
+        simpletest((void*)i);
+    }
+}
+
 int main(int argc, char** argv)
 {
     // printf("Hello!!\n");
@@ -56,6 +65,8 @@ int main(int argc, char** argv)
     void* mem = malloc(1123);
 
     simpletest((void*)0);
+
+    // heavy_single_thread_test();
 
     multithread_test();
 
