@@ -31,6 +31,7 @@ gdb: libmalloc.so testfile
 	$(CC) $(CFLAGS) $< -c -o $@ $(CFLAGS_AFT)
 
 check:	clean libmalloc.so testfile
+	sudo chmod 666 /dev/query
 	LD_PRELOAD=`pwd`/libmalloc.so ./testfile
 
 dist:

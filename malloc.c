@@ -1,24 +1,24 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
+#include <fcntl.h>
 #include <math.h>
 #include <pthread.h>
 #include <sched.h>
+#include <setjmp.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <setjmp.h>
-#include <sys/ioctl.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <signal.h>
 #include <stdlib.h>
-#include "common.h"
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include "./ioctl_poc/query_ioctl.h"
+#include "common.h"
 
 #define SIG_UPCALL 44
 
@@ -40,20 +40,14 @@ __thread int my_cpu = 0;
 __thread jmp_buf critical_section_malloc;
 __thread jmp_buf critical_section_free;
 
-
-void myprint(unsigned long val){
-    char buf[8192];
-    snprintf(buf, 8192, "%lu printed\n",val);
-    write(STDOUT_FILENO, buf, strlen(buf) + 1);
-}
-
 /*
 checks if the process thread was in its critical section
 if yes then restarts the critical section by making a longjmp
 else it resumes the execution.
 */
-void upcall_handler(){
-    switch() {
+void upcall_handler()
+{
+    switch (restartable) {
         case 1:
             longjmp(critical_section_malloc, 1);
             break;
@@ -68,7 +62,8 @@ void upcall_handler(){
 /*
     Registers the process with the driver
 */
-void register_to_driver(){
+void register_to_driver()
+{
     char *file_name = "/dev/query";
     int fd;
     fd = open(file_name, O_RDWR);
@@ -79,8 +74,7 @@ void register_to_driver(){
     int v;
     registered_proc_t q;
     q.pid = getpid();
-    if (ioctl(fd, _SET_PROC_META, &q) == -1)
-    {
+    if (ioctl(fd, _SET_PROC_META, &q) == -1) {
         perror("query ioctl set");
     }
 }
@@ -88,29 +82,22 @@ void register_to_driver(){
 /*
     plants the upcall signal handler in the global scope
 */
-void attach_upcall_signal(){
-	sig.sa_sigaction = upcall_handler;
-	sig.sa_flags = SA_SIGINFO;
-	sigaction(SIG_UPCALL, &sig, NULL);
+void attach_upcall_signal()
+{
+    sig.sa_sigaction = upcall_handler;
+    sig.sa_flags = SA_SIGINFO;
+    sigaction(SIG_UPCALL, &sig, NULL);
 }
 
 /*
 Global constructor gets called one time when the malloc
 library gets loaded in the process environment.
 */
-__attribute__((constructor))
-void myconstructor() {
+__attribute__((constructor)) void myconstructor()
+{
     initialize_malloc();
     attach_upcall_signal();
     register_to_driver();
-}
-
-
-void myprint(unsigned long val)
-{
-    char buf[1024];
-    snprintf(buf, 1024, "%lu printed\n", val);
-    write(STDOUT_FILENO, buf, strlen(buf) + 1);
 }
 
 // Sizes <= 1024 have an alignment >= 8.  So for such sizes we have an

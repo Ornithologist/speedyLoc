@@ -2,6 +2,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <sched.h>
+#include <setjmp.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -139,6 +140,8 @@ extern int malloc_initialized;
 extern int num_size_classes;
 extern __thread int restartable;
 extern __thread int my_cpu;
+extern __thread jmp_buf critical_section_malloc;
+extern __thread jmp_buf critical_section_free;
 extern char class_array_[FLAT_CLASS_NO];
 extern size_t class_to_size_[MAX_BINS];
 extern size_t class_to_pages_[MAX_BINS];
