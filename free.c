@@ -44,7 +44,7 @@ superblock_h_t *retrieve_mamablock(block_h_t *bptr)
  */
 int restartable_critical_section_free(superblock_h_t *mama_s, block_h_t *bptr)
 {
-    restartable = 1;
+    restartable = 2;
     int path = 0;
     size_t sc = bptr->size_class;
 
@@ -118,6 +118,7 @@ void __lib_free(void *mem_ptr)
     }
 
     // FAST PATH: hit restartable critical section and return immediately
+    int r = setjmp(critical_section_free);
     int slow_path = restartable_critical_section_free(mama_s, bptr);
     if (slow_path != 0) {
         return;

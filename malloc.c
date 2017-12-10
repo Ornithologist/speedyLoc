@@ -11,9 +11,19 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <setjmp.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdlib.h>
 #include "common.h"
+#include "./ioctl_poc/query_ioctl.h"
+
+#define SIG_UPCALL 44
 
 // ini globals
+struct sigaction sig;
 long sys_page_size = SYS_PAGE_SIZE;
 int sys_page_shift = 16;
 int sys_core_count = MAX_SYS_CORE_COUNT;
@@ -27,6 +37,74 @@ heap_h_t cpu_heaps[MAX_SYS_CORE_COUNT + 1];
 // per thread global
 __thread int restartable = 0;
 __thread int my_cpu = 0;
+__thread jmp_buf critical_section_malloc;
+__thread jmp_buf critical_section_free;
+
+
+void myprint(unsigned long val){
+    char buf[8192];
+    snprintf(buf, 8192, "%lu printed\n",val);
+    write(STDOUT_FILENO, buf, strlen(buf) + 1);
+}
+
+/*
+checks if the process thread was in its critical section
+if yes then restarts the critical section by making a longjmp
+else it resumes the execution.
+*/
+void upcall_handler(){
+    switch() {
+        case 1:
+            longjmp(critical_section_malloc, 1);
+            break;
+        case 2:
+            longjmp(critical_section_free, 1);
+            break;
+        default:
+            return;
+    }
+}
+
+/*
+    Registers the process with the driver
+*/
+void register_to_driver(){
+    char *file_name = "/dev/query";
+    int fd;
+    fd = open(file_name, O_RDWR);
+    if (fd == -1) {
+        perror("Could not open device file");
+        exit(1);
+    }
+    int v;
+    registered_proc_t q;
+    q.pid = getpid();
+    if (ioctl(fd, _SET_PROC_META, &q) == -1)
+    {
+        perror("query ioctl set");
+    }
+}
+
+/*
+    plants the upcall signal handler in the global scope
+*/
+void attach_upcall_signal(){
+	sig.sa_sigaction = upcall_handler;
+	sig.sa_flags = SA_SIGINFO;
+	sigaction(SIG_UPCALL, &sig, NULL);
+}
+
+/*
+Global constructor gets called one time when the malloc
+library gets loaded in the process environment.
+*/
+__attribute__((constructor))
+void myconstructor() {
+    initialize_malloc();
+    attach_upcall_signal();
+    register_to_driver();
+}
+
 
 // Sizes <= 1024 have an alignment >= 8.  So for such sizes we have an
 // array indexed by ceil(size/8).  Sizes > 1024 have an alignment >= 128.
@@ -299,6 +377,7 @@ superblock_h_t *retrieve_superblock_from_global_heap(int sc)
 block_h_t *search_local_block(int sc)
 {
     // FAST PATH: find one in local free list
+    int r = setjmp(critical_section_malloc);
     block_h_t *bptr = restartable_critical_section(sc);
     if (bptr != NULL) return bptr;
     // SLOW PATH: super block is empty, search in global heap
